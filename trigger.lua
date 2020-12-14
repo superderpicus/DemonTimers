@@ -1,26 +1,30 @@
 function(states, event, ...)
-    local time = GetTime();  
-    local aura_env = aura_env;    
+    local time = GetTime();
+    local aura_env = aura_env;
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         if not ... then return; end
         local _, sub, _, source, _, _, _, dest, _, _, _, spell, _ = ...;
+        local summonTable = aura_env.summonTable;
         if source == WeakAuras.myGUID then
-            if sub == "SPELL_SUMMON" and aura_env.summonTable[spell] then
-                local entry = aura_env.summonTable[spell];
+            if sub == "SPELL_SUMMON" and summonTable[spell] then
+                local entry = summonTable[spell];
                 aura_env.print(spell, entry.name, 'spawned');
                 
-                --local health = entry.hpMod and (UnitHealthMax'player' * entry.hpMod) or entry.hpValue;
                 if entry.name == "Wild Imp" then
-                    if aura_env.hogCast then
-                        aura_env.print('imp time to spawn:', time - aura_env.hogCast);
-                    end
-                    aura_env.demons.imps[dest] = { show = true, hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, duration = entry.duration, casts = aura_env.impCasts, maxCasts = aura_env.impCasts, expirationTime = (time + entry.duration), id = spell, active = time, spawn = time, innerDemon = (spell == 279910) };      
+                    aura_env.imps[dest] = { show = true, hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, duration = entry.duration, casts = aura_env.impCasts, maxCasts = aura_env.impCasts, expirationTime = (time + entry.duration), id = spell, active = time, spawn = time, innerDemon = (spell == 279910) };      
                     aura_env.addToStats(entry);
                     aura_env.assignImpClump(dest);
-                    aura_env.updateImps(states);
+                    aura_env.updateSpecificImp(states, dest);
                     
-                    C_Timer.After(entry.duration + 0.1, function() aura_env.updateImps(states); end)
-                    C_Timer.After(60, function() aura_env.demons.imps[dest] = nil; end);
+                    C_Timer.After(1, function() 
+                        if aura_env.imps[dest].active >= time then 
+                            aura_env.imps[dest].active = time - 10; 
+                            aura_env.updateSpecificImp(states, dest); 
+                        end 
+                    end);
+
+                    C_Timer.After(entry.duration + 0.1, function() aura_env.updateSpecificImp(states, dest) end)
+                    C_Timer.After(60, function() aura_env.imps[dest] = nil; end);
                 else
                     -- for some reason, fel lord summons 'two' exact demons, even though there is only one,
                     -- so we have to account for it otherwise there would be 2 fel lords in the timers
@@ -34,16 +38,14 @@ function(states, event, ...)
                     
                     if spell == aura_env.summonTable.tyrant then
                         if not aura_env.checked or aura_env.checked < GetTime() - 1 then
-                            aura_env.checked = GetTime()
+                            aura_env.checked = time;
                             aura_env.getTyrantDuration();
                         end
                         
-                        local dur = entry.duration;--aura_env.getTyrantDuration();   
+                        local dur = entry.duration;  
                         aura_env.demons[dest].duration = dur;
                         aura_env.demons[dest].expirationTime = time + dur;
-                        
-                        local extend = 15; -- i think lol
-                        aura_env.tyrantCast = false;
+                        local extend = 15;
                         
                         if not aura_env.tyrant or aura_env.tyrant < time then
                             aura_env.tyrant = time + extend;
@@ -53,16 +55,16 @@ function(states, event, ...)
                         end
                         
                         for k, v in pairs(aura_env.demons) do
-                            if k ~= 'imps' and (v.name ~= "Tyrant" and v.name ~= "Nether Portal" and v.name ~= 'Subjugated') and v.duration and v.expirationTime then 
+                            if (not aura_env.extensionBlacklist[v.name]) and v.duration and v.expirationTime then
                                 v.duration = v.duration + extend;
                                 v.expirationTime = v.expirationTime + extend;
                                 aura_env.stats.totalTyrantExtension = aura_env.stats.totalTyrantExtension + extend;
-                                C_Timer.After(v.expirationTime - GetTime() + 0.1, function() aura_env.updateIndividualDemon(states, k); end) 
+                                C_Timer.After(v.expirationTime - GetTime() + 0.1, function() aura_env.updateIndividualDemon(states, k); end)
                                 aura_env.updateIndividualDemon(states, k);
                             end
                         end
                         
-                        for _,v in pairs(aura_env.demons.imps) do
+                        for _,v in pairs(aura_env.imps) do
                             if v.duration and v.expirationTime then 
                                 v.duration = v.duration + extend;
                                 v.expirationTime = v.expirationTime + extend;
@@ -71,15 +73,13 @@ function(states, event, ...)
                     end
                 end
             elseif sub == "SPELL_AURA_APPLIED" then
-                if aura_env.summonTable[spell] then
-                    local entry = aura_env.summonTable[spell];
-                    if entry.enabled then                        
+                if summonTable[spell] then
+                    local entry = summonTable[spell];
+                    if entry.enabled then
                         aura_env.demons[dest] = { name = entry.name, id = spell, duration = entry.duration, expirationTime = time + entry.duration }; 
                         aura_env.updateIndividualDemon(states, dest);
                     end
-                end
-                
-                if aura_env.tyrantAnimaPower == spell then
+                elseif aura_env.tyrantAnimaPower == spell then
                     aura_env.getTyrantDuration();
                 end
             elseif sub == "SPELL_AURA_REMOVED" then
@@ -90,24 +90,22 @@ function(states, event, ...)
                             v.changed = true; 
                         end
                     end
-                end
-                if aura_env.tyrantAnimaPower == spell then
+                elseif aura_env.tyrantAnimaPower == spell then
                     aura_env.getTyrantDuration();
-                end
-                
+                end                
             elseif sub == "SPELL_CAST_SUCCESS" and spell == 196277 then -- implosion
                 aura_env.imploded = true;
-                aura_env.updateImps(states);                   
-            elseif (sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" or sub == "UNIT_DISSIPATES") and (aura_env.demons.imps[dest] or states[dest] or WeakAuras.myGUID == dest) then
+                aura_env.updateImps(states);
+            elseif (sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" or sub == "UNIT_DISSIPATES") and (aura_env.imps[dest] or states[dest] or WeakAuras.myGUID == dest) then
                 if dest == WeakAuras.myGUID then
                     -- player died, all demons have to be wiped
                     aura_env.demons = {};
-                    aura_env.demons.imps = {};
+                    aura_env.imps = {};
                     aura_env.updateIndividualDemon(states, dest);
                 else
-                    if aura_env.demons.imps[dest] then 
-                        aura_env.demons.imps[dest] = nil; 
-                        aura_env.updateImps(states);
+                    if aura_env.imps[dest] then 
+                        aura_env.imps[dest] = nil; 
+                        aura_env.updateSpecificImp(states, dest)
                     else
                         aura_env.demons[dest] = nil;
                         aura_env.updateIndividualDemon(states, dest);
@@ -117,13 +115,14 @@ function(states, event, ...)
             
             if (spell == 105174 or spell == 86040) then 
                 if sub == 'SPELL_CAST_SUCCESS' then
-                    aura_env.listening = true;
-                    aura_env.stats.hogs = aura_env.stats.hogs + 1;
-                    aura_env.sampleUnit = nil;
-                    
-                    aura_env.addImpClump(time);
-                    aura_env.hogCast = time;
-                elseif sub == 'SPELL_DAMAGE' then
+                    aura_env.addImpClump(time); -- create an imp clump from the HoG
+                    -- Tracking horned nightmare for the 'stat' part of the weak aura
+                    if (aura_env.config.printStats) then
+                        aura_env.listening = true;
+                        aura_env.stats.hogs = aura_env.stats.hogs + 1;
+                        aura_env.sampleUnit = nil;
+                    end
+                elseif sub == 'SPELL_DAMAGE' and aura_env.config.printStats then
                     if aura_env.listening then
                         aura_env.sampleUnit = dest;
                         aura_env.listening = nil;
@@ -134,54 +133,54 @@ function(states, event, ...)
                     end
                 end
             end
-        else            
-            if sub:find("CAST") and aura_env.demons.imps[source] then
-                if sub == "SPELL_CAST_SUCCESS" then
-                    aura_env.stats.totalFirebolts = aura_env.stats.totalFirebolts + 1;
-                    if (not aura_env.tyrant or aura_env.tyrant < time) then
-                        aura_env.demons.imps[source].casts = aura_env.demons.imps[source].casts - 1;
-                        aura_env.demons.imps[source].castingUntil = nil;
-                        aura_env.demons.imps[source].active = time;
-                        if aura_env.demons.imps[source].casts <= 0 then -- imp is done for
-                            aura_env.demons.imps[source].show = false;
-                            aura_env.removeFromImpClump(source);
+        else
+            if summonTable[summonTable.HoGImp].enabled or summonTable[summonTable.IDImp].enabled then
+                local tyrantActive = aura_env.tyrant and aura_env.tyrant > time; -- tyrant active boolean
+                local timeForTyrant = tyrantActive and aura_env.tyrant - time or -1000000000; -- remaining time on tyrant
+                
+                if sub == "SPELL_CAST_SUCCESS" and aura_env.imps[source] then
+                    if aura_env.config.printStats then aura_env.stats.totalFirebolts = aura_env.stats.totalFirebolts + 1; end
+                    if (not tyrantActive) then
+                        aura_env.imps[source].casts = aura_env.imps[source].casts - 1;
+                        aura_env.imps[source].castingUntil = nil;
+                        aura_env.imps[source].active = time;
+                        aura_env.updateSpecificImp(states, source);
+
+                        if aura_env.imps[source].casts <= 0 then -- yeet
+                            aura_env.imps[source].show = false;
+                            aura_env.removeFromImpClump(states, source);
                             C_Timer.After(aura_env.despawnDelay, function() 
-                                    aura_env.demons.imps[source] = nil; 
-                                    WeakAuras.ScanEvents("DEMONTIMER_IMP_UPDATE")  end);
+                                    aura_env.imps[source] = nil; 
+                                    aura_env.updateSpecificImp(states, source) end);
                         end
                     else
-                        aura_env.stats.totalTyrantFirebolts = aura_env.stats.totalTyrantFirebolts + 1;
+                        if aura_env.config.printStats then aura_env.stats.totalTyrantFirebolts = aura_env.stats.totalTyrantFirebolts + 1; end
                     end
-                elseif sub == "SPELL_CAST_START" and aura_env.demons.imps[source] then
+                elseif sub == "SPELL_CAST_START" and aura_env.imps[source] then
                     local haste = 1 + UnitSpellHaste("player") / 100;
                     local castTime = 2 / haste;
-                    aura_env.demons.imps[source].castingUntil = time + castTime;
-                    aura_env.demons.imps[source].active = time;                    
+                    
+                    aura_env.imps[source].castingUntil = time + castTime;
+                    aura_env.imps[source].active = time;
+                    aura_env.updateSpecificImp(states, source);
+                    
                     local delay = 0.2;
-                    C_Timer.After( castTime + delay, function()     
-                            WeakAuras.ScanEvents("DEMONTIMER_IMP_UPDATE", source) 
-                    end );
+                    if (not tyrantActive) or (timeForTyrant < (time + castTime)) then
+                        C_Timer.After( castTime + delay, function()     
+                                --WeakAuras.ScanEvents("DEMONTIMER_IMP_UPDATE", source) 
+                                aura_env.updateSpecificImp(states, source); 
+                        end );
+                    end
                 end
-                
-                aura_env.updateImps(states);
             end
-        end
-    elseif event == "DEMONTIMER_IMP_UPDATE" then
-        local source = ...;
-        if source then
-            if aura_env.demons.imps[source] and aura_env.demons.imps[source].castingUntil and aura_env.demons.imps[source].castingUntil < time then
-                aura_env.updateImps(states);
-            end
-        else
-            aura_env.updateImps(states);            
         end
     elseif event == "FRAME_UPDATE" then
         if not aura_env.last or aura_env.last < GetTime() - aura_env.config.interval then
-            aura_env.updateImps(states);
+            aura_env.updateFillerImps(states);
+            --aura_env.updateImps(states);
+            aura_env.updateText();
             aura_env.scanDeCon();
-            --  return true;
         end
-        --return;
     elseif event == "PLAYER_ENTERING_WORLD" or event == "OPTIONS" or event == "UNIT_PET" then
         aura_env.scanDeCon();
     else
