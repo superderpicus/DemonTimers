@@ -1,52 +1,55 @@
 function(states, event, ...)
     local time = GetTime();
     local aura_env = aura_env;
-    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        if not ... then return; end
-        local _, sub, _, source, _, _, _, dest, _, _, _, spell, _ = ...;
-        local summonTable = aura_env.summonTable;
-        if source == WeakAuras.myGUID then
-            if sub == "SPELL_SUMMON" and summonTable[spell] then
-                local entry = summonTable[spell];
-                aura_env.print(spell, entry.name, 'spawned');
-                
-                if entry.name == "Wild Imp" then
-                    aura_env.imps[dest] = { show = true, hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, duration = entry.duration, casts = aura_env.impCasts, maxCasts = aura_env.impCasts, expirationTime = (time + entry.duration), id = spell, active = time, spawn = time, innerDemon = (spell == 279910) };      
-                    aura_env.addToStats(entry);
-                    aura_env.assignImpClump(dest);
-                    aura_env.updateSpecificImp(states, dest);
-                    
-                    C_Timer.After(1, function() 
-                        if aura_env.imps[dest].active >= time then 
-                            aura_env.imps[dest].active = time - 10; 
-                            aura_env.updateSpecificImp(states, dest); 
-                        end 
-                    end);
+    local summonTable = aura_env.summonTable; 
 
+    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        if not ... then return; end -- checking for 'dummy' events
+        local _, sub, _, source, _, _, _, dest, _, _, _, spell, _ = ...;
+        if source == WeakAuras.myGUID then -- source was player unit
+            local entry = summonTable[spell];
+            if sub == "SPELL_SUMMON" and entry.enabled then  -- summoned unit that is valid on the summon table
+                aura_env.print(spell, entry.name, 'spawned'); -- debugging information
+                
+                if entry.name == "Wild Imp" then -- imps have to be handled differently
+                    aura_env.imps[dest] = { show = true, hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, duration = entry.duration, casts = aura_env.impCasts, maxCasts = aura_env.impCasts, expirationTime = (time + entry.duration), id = spell, active = time, spawn = time, innerDemon = (spell == 279910) };      
+                    aura_env.addToStats(entry); -- stat module
+                    aura_env.assignImpClump(dest); -- assign an imp clump for this imp
+                    aura_env.updateSpecificImp(states, dest); -- update new imp clump (create states)
+                    -- after the duration has passed, update the imp again to check if it was autohid,
+                    -- and after 60 seconds just delete the imp anyway because fuck it
                     C_Timer.After(entry.duration + 0.1, function() aura_env.updateSpecificImp(states, dest) end)
-                    C_Timer.After(60, function() aura_env.imps[dest] = nil; end);
+                    C_Timer.After(60, function() aura_env.removeFromImpClump(states, dest); aura_env.imps[dest] = nil; end);
                 else
                     -- for some reason, fel lord summons 'two' exact demons, even though there is only one,
                     -- so we have to account for it otherwise there would be 2 fel lords in the timers
-                    if (spell == 212459 and (not aura_env.felLord or aura_env.felLord < time)) or spell ~= 212459 then
+                    if spell == 212459 and (not aura_env.felLord or aura_env.felLord < time) then
                         aura_env.felLord = time + 0.1; -- basically our 'cooldown' variable
-                        aura_env.demons[dest] = { hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, id = spell, duration = entry.duration, expirationTime = time + entry.duration }; -- new demon indexed as GUID
-                        C_Timer.After(entry.duration + 0.1, function() aura_env.updateIndividualDemon(states, dest); end)  -- after timer is up, reevaluate the demon table
-                        aura_env.addToStats(entry); -- stats module
-                        aura_env.updateIndividualDemon(states, dest);
+                    elseif spell == 212459 then
+                        return;
                     end
+
+                    aura_env.demons[dest] = { hpMod = entry.hpMod, hpVal = entry.hpVal, name = entry.name, id = spell, duration = entry.duration, expirationTime = time + entry.duration }; -- new demon indexed as GUID
+                    C_Timer.After(entry.duration + 0.1, function() aura_env.updateIndividualDemon(states, dest); end)  -- after timer is up, reevaluate the demon
+                    aura_env.addToStats(entry); -- stats module
+                    aura_env.updateIndividualDemon(states, dest); -- update new demon (create state)
                     
+                    -- if tyrant is summoned we have to evaluate all the new demons' timers
                     if spell == aura_env.summonTable.tyrant then
+                        -- cooldown for getting tyrant timer, to prevent multi checks in torghast
                         if not aura_env.checked or aura_env.checked < GetTime() - 1 then
                             aura_env.checked = time;
                             aura_env.getTyrantDuration();
                         end
                         
-                        local dur = entry.duration;  
-                        aura_env.demons[dest].duration = dur;
-                        aura_env.demons[dest].expirationTime = time + dur;
-                        local extend = 15;
+                        local dur = entry.duration; -- tyrant duration
+                        local extend = 15; -- tyrant extension timer
+                        aura_env.demons[dest].duration = dur; -- duration updated
+                        aura_env.demons[dest].expirationTime = time + dur; -- expirationTime updated
                         
+                        -- this tyrant variable is set for imps, because they only
+                        -- don't expend energy for 15 seconds. In the case of multiple
+                        -- tyrant summons, this will use only the longest value
                         if not aura_env.tyrant or aura_env.tyrant < time then
                             aura_env.tyrant = time + extend;
                         else
@@ -54,55 +57,52 @@ function(states, event, ...)
                             aura_env.tyrant = aura_env.tyrant < n and n or aura_env.tyrant;
                         end
                         
+                        -- extend demons, as long as they are not on the blacklist
                         for k, v in pairs(aura_env.demons) do
-                            if (not aura_env.extensionBlacklist[v.name]) and v.duration and v.expirationTime then
+                            if (not aura_env.extensionBlacklist[v.id]) and v.duration and v.expirationTime then
                                 v.duration = v.duration + extend;
                                 v.expirationTime = v.expirationTime + extend;
-                                aura_env.stats.totalTyrantExtension = aura_env.stats.totalTyrantExtension + extend;
-                                C_Timer.After(v.expirationTime - GetTime() + 0.1, function() aura_env.updateIndividualDemon(states, k); end)
+                                if aura_env.config.printStats then aura_env.stats.totalTyrantExtension = aura_env.stats.totalTyrantExtension + extend; end -- stats module
                                 aura_env.updateIndividualDemon(states, k);
+                                C_Timer.After(v.expirationTime - GetTime() + 0.1, function() aura_env.updateIndividualDemon(states, k); end) -- update demons after they expire
                             end
                         end
                         
+                        -- 'extend' imps, lol they already last 40 seconds who cares
                         for _,v in pairs(aura_env.imps) do
-                            if v.duration and v.expirationTime then 
+                            if v.duration and v.expirationTime then
                                 v.duration = v.duration + extend;
                                 v.expirationTime = v.expirationTime + extend;
                             end
                         end
                     end
                 end
-            elseif sub == "SPELL_AURA_APPLIED" then
-                if summonTable[spell] then
-                    local entry = summonTable[spell];
-                    if entry.enabled then
-                        aura_env.demons[dest] = { name = entry.name, id = spell, duration = entry.duration, expirationTime = time + entry.duration }; 
-                        aura_env.updateIndividualDemon(states, dest);
-                    end
-                elseif aura_env.tyrantAnimaPower == spell then
-                    aura_env.getTyrantDuration();
+            elseif sub == "SPELL_AURA_APPLIED" and summonTable[spell] then -- this will cover nether portal and subjugate
+                local entry = summonTable[spell];
+                if entry.enabled then
+                    -- subjugate was enabled
+                    aura_env.demons[dest] = { name = entry.name, id = spell, duration = entry.duration, expirationTime = time + entry.duration }; 
+                    aura_env.updateIndividualDemon(states, dest);
                 end
-            elseif sub == "SPELL_AURA_REMOVED" then
-                if spell == 1098 then 
-                    for _,v in pairs(aura_env.demons) do
-                        if v.id and v.id == spell then
-                            v.show = false;
-                            v.changed = true; 
-                        end
+            elseif sub == "SPELL_AURA_REMOVED" and summonTable[spell] then -- removed
+                -- subjugate doesn's exist anymore
+                for _,v in pairs(aura_env.demons) do
+                    if v.id and v.id == spell then
+                        v.show = false;
+                        v.changed = true; 
                     end
-                elseif aura_env.tyrantAnimaPower == spell then
-                    aura_env.getTyrantDuration();
-                end                
-            elseif sub == "SPELL_CAST_SUCCESS" and spell == 196277 then -- implosion
+                end
+            elseif sub == "SPELL_CAST_SUCCESS" and spell == 196277 then -- implosion cast
                 aura_env.imploded = true;
                 aura_env.updateImps(states);
             elseif (sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" or sub == "UNIT_DISSIPATES") and (aura_env.imps[dest] or states[dest] or WeakAuras.myGUID == dest) then
-                if dest == WeakAuras.myGUID then
+                if dest == WeakAuras.myGUID then 
                     -- player died, all demons have to be wiped
                     aura_env.demons = {};
                     aura_env.imps = {};
                     aura_env.updateIndividualDemon(states, dest);
                 else
+                    -- demon died, wipe it
                     if aura_env.imps[dest] then 
                         aura_env.imps[dest] = nil; 
                         aura_env.updateSpecificImp(states, dest)

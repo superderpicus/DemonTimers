@@ -39,15 +39,14 @@ local summonTable = aura_env.summonTable;
 
 aura_env.extensionBlacklist = 
 {
-    [summonTable[265187].name] = true,
-    [summonTable[267218].name] = true,
-    [summonTable[1098].name] = true,    
-}
+    [265187] = true,
+    [267218] = true,
+    [1098] = true,    
+};
 
 -- misc variable definitions
 aura_env.demons = {};
 aura_env.imps = {};
-aura_env.activeImps = {};
 aura_env.impCasts = UnitLevel'player' >= 56 and 6 or 5;
 aura_env.impCost = UnitLevel'player' >= 56 and 16 or 20;
 aura_env.impTimeThresh = tonumber(conf.delay);
@@ -145,11 +144,11 @@ aura_env.getTyrantDuration = function()
     local x = { GetPlayerAuraBySpellID(aura_env.tyrantAnimaPower); } -- check if the anima power is active
     local dur; -- placeholder variable
     if x and x[3] then -- if buff is active and stacks exist
-        dur = aura_env.tyrantBaseDuration * 2; -- buff is active, duration is ~~base * stacks~~ it doesnt stack
+        dur = summonTable[265187].duration * 2; -- buff is active, duration is ~~base * stacks~~ it doesnt stack
     else
-        dur = aura_env.tyrantBaseDuration; -- buff is not active, return default duration
+        dur = summonTable[265187].duration -- buff is not active, return default duration
     end
-    aura_env.summonTable[265187].duration = dur;
+    return dur;
 end
 
 -- print : function to print a message, however
@@ -222,18 +221,7 @@ local countImps = function()
     return c, a, r, s; -- return all imp counts
 end
 
-aura_env.addImpClump = function(time)
-    --[[
-          hand of guldan cast
-    after a cast the imps spawn after x seconds:
-     1st: 0.557~
-     2nd: 0.817~
-     3rd: 0.952~          -> 0.395~ second window for 3 imps
-     4th: 0.952~
-     5th: 1.221~
-     6th: 1.407~          -> 0.455~ second window for 3 imps   
-     --]]
-    
+aura_env.addImpClump = function(time)    
     impClumps[time] = {};
     aura_env.print('clump made at', time);
 end
@@ -325,7 +313,7 @@ aura_env.updateImpClump = function(states, clumpKey)
                 spent = c,
                 progressType = 'static',
                 value = currCasts or 0,-- / c,
-                total = maxCasts or 0,-- / c,            
+                total = maxCasts or 0,-- / c,
                 duration = aura_env.imps[ index ] and aura_env.imps[ index ].duration,
                 expirationTime = aura_env.imps[ index ] and aura_env.imps[ index ].expirationTime,
                 autoHide = true,
@@ -354,7 +342,7 @@ aura_env.updateFillerImps = function(states)
     states['filler'] = { show = false, changed = true }; -- reset filler imps
 
     -- Handle 'filler' imp states
-    local combat =  UnitAffectingCombat'player';        
+    local combat =  UnitAffectingCombat'player';
     if showFiller and fillerImps > 0 and (not combat or (not oocOnly and combat)) then
         states['filler'] = 
         {
@@ -376,7 +364,7 @@ local impCState = { 0, 0 };
 -- updateImps : function to update the imp states
 aura_env.updateImps = function(states)
     aura_env.last = GetTime();
-    if summonTable[104317].enabled or summonTable[279910].enabled then        
+    if summonTable[104317].enabled or summonTable[279910].enabled then
         local _, _, expectedImpCount = countImps();
         impCState[1] = impCState[2];
         impCState[2] = expectedImpCount;
@@ -411,7 +399,7 @@ aura_env.updateImps = function(states)
         aura_env.updateFillerImps(states);
     end
     aura_env.scanDeCon();
-end   
+end
 
 aura_env.scanDeCon = function()
     if conf.scanDecon then
@@ -541,7 +529,7 @@ else
 end
 
 aura_env.setText = function(text)
-    if font then 
+    if font and aura_env.config.debug then 
         font:SetText("["..aura_env.id.."] Debugging:\n"..text);
         font:Show(); 
     end
