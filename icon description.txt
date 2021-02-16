@@ -1,0 +1,103 @@
+[size=20][color=#FFCC00][b]Demon Timers (v3) (by taters)[/b][/color][/size]
+Individual demon timers all in one aura. No need for dynamic group.
+This aura also features fully fleshed author options, allowing full customization to suit your needs.
+[b]If you encounter any issues, or have any feedback, don't comment it here because I don't read it. Instead, send it to my discord taters#0001.[/b]
+
+Bar Version: [url]https://wago.io/DemonTimers[/url]
+
+So, there are some cool new options! This should make it a lot easier for many people to modify the timers to their liking.
+
+[size=15][color=#FFCC00][b]How to Use Options[/b][/color][/size]
+To access options, simply open your weak auras addon, select the 'Demon Timers V2' aura, and navigate to this tab: 
+[img size=50]https://i.imgur.com/oL11yuu.png[/img]
+
+[size=15][b][color=#FFCC00]General Options[/color][/size][/b]
+[table]
+[tr][th]Option Name[/th][th]What It Does[/th][/tr]
+[tr][td]Debug[/td][td]Enables a few print messages to chat[/td][/tr]
+[tr][td]Vertical Spacing Between Icons[/td][td]Pixels of spacing between icons when offset[/td][/tr]
+[tr][td]Number of Icons Per Row[/td][td]Number of icons until it creates a new column[/td][/tr]
+[tr][td]Decimal Precision In Display[/td][td]Number of decimals to show on timers[/td][/tr]
+[tr][td]Imp Activity Delay[/td][td]With the new method of imp tracking, they are automatically removed from active clumps based on their activity. If they haven't been active since the activity delay, they will be despawned[/td][/tr]
+[tr][td]Use Cast Time Instead[/td][td]Instead of using a static number provided by the previous option, note the expected cast time and use that as the delay[/td][/tr]
+[tr][td]Auto Update Interval[/td][td]If the demons have not been updated since this interval, it will automatically run an update[/td][/tr]
+[tr][td]Imp Summon Delay[/td][td]When imps are spawned, if they are within this delay of each other, they will form a cluster, or 1 imp icon[/td][/tr]
+[tr][td]Imp Despawn Delay[/td][td]This option is mainly meant for use with the 'Filler' imps option. The imp cluster will stay active until this delay is over, preventing filler imps from showing false positives[/td][/tr]
+[tr][td]Imp Update Mode[/td][td]Toggle between 2 different update modes to handle imps[/td][/tr]
+[tr][td]Update Interval[/td][td]The interval is the general time to 'tick'. Every x seconds it will check which clumps need to be updated, and if it is flagged for updating, and the timer is up, it will update the state[/td][/tr]
+[tr][td]Update Window[/td][td]When an imp does an activity that would normally update it, it will instead flag the clump for updating after time + x seconds. Each clump may only be flagged once until it is updated[/td][/tr]
+[tr][td]Horizontal Growth[/td][td]Which way to grow if the column is full[/td][/tr]
+[tr][td]Sorting[/td][td]Which way to sort the demons. Based off of the 'Order' variable, and remaining time within the same order value[/td][/tr]
+[tr][td]Vertical Growth[/td][td]Which way to grow the icons vertically[/td][/tr]
+[tr][td]Show Filler Imps[/td][td]When imps are not active they are discarded, whether they should exist or not. Imps that should exist but dont fall under 'filler', and this option will show a seperate state with the count of imps that dont exist but should[/td][/tr]
+[tr][td]Only Not In Combat[/td][td]Filler imps can be kind of janky, so I created this option to only show them out of combat[/td][/tr]
+[/table]
+
+[size=15][b][color=#FFCC00]New Options[/color][/size][/b]
+The 'New Options' are located in conditions, as well as display. You may edit the colours in conditions for each individual icon, as well as display text 2 will have the options for imp customization.
+The imp customization values are:
+[color=#FFCC00]%count:[/color] Imp Count (in cluster)
+[color=#FFCC00]%totalCasts:[/color] Imp Casts (in cluster)
+[color=#FFCC00]%totalEnergy:[/color] Imp Energy (in cluster)
+[color=#FFCC00]%perImpCasts:[/color] Individual Imp Casts
+[color=#FFCC00]%perImpEnergy:[/color] Individual Imp Energy
+[color=#FFCC00]%percent:[/color] Total Energy Percent
+[color=#FFCC00]%maxCasts:[/color] Imp Max Casts (in cluster)
+[color=#FFCC00]%maxPerImp:[/color] Imp Max Casts (in cluster)
+
+[size=15][b][color=#FFCC00]Demon Options[/color][/size][/b]
+[table][tr][th]Option Name[/th][th]What It Does[/th][/tr]
+[tr][td]Enabled[/td][td]Show an icon for this demon type[/td][/tr]
+[tr][td]Order[/td][td]Sorting order index for this demon type[/td][/tr]
+[/table]
+
+[size=15][b][color=#FFCC00]Misc[/color][/size][/b]
+[table][tr][th]Option Name[/th][th]What It Does[/th][/tr]
+[tr][td]Scan DeCon / Sac Souls[/td][td]This WA will scan the demon count / consumption value if enabled[/td][/tr]
+[/table]
+
+
+[size=26][color=#03fc52][b]Changelog:[/b][/color][/size]
+
+[size=15][color=#03fc8c][b]Shadowlands[/b][/color][/size]
+update: v3 revamp, some new methods. add conditions and stuff
+update: more imp adjustment
+update: adjusted imp clustering, hopefully results in better imp tracking.
+update: fixed filler imp state, as well as totalEnergy bug
+update: revamped a TON of code, trying to further optimize the weak aura, since it was starting to drop frames a little bit. please report any issues resulting from this.
+update: new stat printing mode!
+update: new imp display settings! mess around in the options. Added (probably works) support for the tyrant anima power that extends it's duration.
+update: minor bug fixing
+update: added some new options and filler imp states, mess around
+update: 40s imps
+update: fixed EVERY warning fuck you wago
+update: minor bug fixing, and added support for conditions if you wanted to customize something
+update: added decon scanning for my wa set
+update: fixed fel lord (again lol)
+update: fixed bug scanning for essences when you didn't have heart of azeroth
+update: rewrote it because i hated it
+update: changed how power siphon works, please report any bugs
+update: fixed issue with call fel lord
+update: added functions to pull essence data for accurate VoP procs if you didn't have rank 2
+update: finally fixed the VoP proc bug.
+update: added option to remove 's' from display, and commented all the code for ease of use
+update: added imp count option
+update: added option to print neat stats at the end of an encounter
+update: fixed tyrant being disabled breaking the code
+update: fixed a lua error for current progress not existing. idk why
+update: fixed display for less than 3 shard hogs that showed the wrong amount of casts.
+update: fixed display / added more imp display options
+update: reworked some of the code for efficiency. noticed some odd behaviour sometimes when vision procs ? will look into it. 
+update: added new shard tracking to fix for HoG immediately after a shadow bolt
+update: fixed DeCon because im an idiot
+update: fixed implosion (mostly). 
+update: added support for level 56 ability and added a level up event check
+update: added subjugate demon timer
+update: fixed some code issues, working on updating all the pets and shit
+
+[size=15][color=#03fc8c][b]BFA[/b][/color][/size]
+update: thanks to 호불. i added his code fixing tyrant. https://wago.io/8tbSIUb0_
+update: nether portal and new options!
+update: cleaned up author options
+update: added author options to easier customize.
+update: added pvp demons (call fel lord and summon observer)

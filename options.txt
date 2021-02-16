@@ -1,0 +1,5 @@
+After some revision, I have moved many of the previously available options. You will find |cffffcc00COLOUR|r in the conditions tab, and you can set |cffffcc00TEXT|r in the display tab: |cff00ff00text1|r is the display text showing the name, and |cff00ff00text 2|r will be where you input the imp replacements.
+
+The conditions have also been expanded, allowing for more customizability for users, such as checking if an imp cluster has more than 3 imps, then you most likely got a horned nightmare proc, etc. Mess around however you like.
+
+Imp Formatting Options:|n|cffffcc00%count:|r Imp Count (in cluster)|n|cffffcc00%totalCasts:|r Imp Casts (in cluster)|n|cffffcc00%totalEnergy:|r Imp Energy (in cluster)|n|cffffcc00%perImpCasts:|r Individual Imp Casts|n|cffffcc00%perImpEnergy:|r Individual Imp Energy|n|cffffcc00%percent:|r Total Energy Percent|n|cffffcc00%maxCasts:|r Imp Max Casts (in cluster)|n|cffffcc00%maxPerImp:|r Imp Max Casts (in cluster)|n
