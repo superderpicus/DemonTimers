@@ -47,6 +47,8 @@ function(states, event, ...)
                         end -- end if
                     end -- end for loop
                 end -- end tyrant
+            elseif spell == 337139 then
+                aura_env.handleImplosive(sub);
             elseif sub == 'SPELL_AURA_APPLIED' then -- subjugate ??
                 local entry = summonTable[spell];
                 if entry and entry.enabled then
@@ -66,16 +68,16 @@ function(states, event, ...)
             elseif sub == 'SPELL_CAST_SUCCESS' and spell == 196277 then -- implosion
                 aura_env.implode(states); -- implosion has to be handled
             elseif sub == 'SPELL_DAMAGE' and spell == 86040 then
-                    if aura_env.listening then
-                        aura_env.sampleUnit = dest;
-                        aura_env.listening = nil;
-                    elseif aura_env.sampleUnit then
-                        if aura_env.sampleUnit == dest then
-                            aura_env.addStat('horned_procs', 1);                            
-                            aura_env.impClumps[aura_env.latest_hog].expected = 6;                            
-                        end
+                if aura_env.listening then
+                    aura_env.sampleUnit = dest;
+                    aura_env.listening = nil;
+                elseif aura_env.sampleUnit then
+                    if aura_env.sampleUnit == dest then
+                        aura_env.addStat('horned_procs', 1);                            
+                        aura_env.impClumps[aura_env.latest_hog].expected = 6;                            
                     end
                 end
+            end
             return true;
         else -- source not player
             if sub == 'UNIT_DIED' or sub == 'UNIT_DISSIPATES' or sub == 'UNIT_DESTROYED' then
@@ -113,6 +115,11 @@ function(states, event, ...)
         if unit == 'player' and spell == 196277 then
             aura_env.pending = GetSpellCount(196277);
         end
+    elseif event == 'UNIT_POWER_UPDATE' then
+        local unit, power = ...;
+        if unit == 'player' and power == 'SOULSHARDS' then
+            aura_env.shardUpdate();
+        end
     else -- throttled every frame for updating specific things
         if not aura_env.last or aura_env.last < time - aura_env.config.general.interval then
             aura_env.last = time; -- throttle timer
@@ -126,37 +133,5 @@ function(states, event, ...)
             aura_env.impCheck = time;
             aura_env.tick(states); -- tick is a new experimental update system im using
         end
-    end
-end
-
-function(event, ...)
-    if not aura_env.config.stats then return; end
-    local m = aura_env.config.statsMode;
-    
-    if event:find('CHALLENGE') and m == 3 then
-        --local keyLevel = C_ChallengeMode.GetActiveKeystoneInfo() ;
-        if event == 'CHALLENGE_MODE_START' then
-            local mapID = ...;
-            aura_env.startStats(mapID);
-        else
-            aura_env.endStats();
-        end
-    elseif event:find('ENCOUNTER') and m == 2 then
-        if event == 'ENCOUNTER_START' then
-            local _, name = ...;
-            aura_env.startStats(name);
-        else
-            aura_env.endStats();
-        end
-    elseif event:find('REGEN') and m == 1 then
-        if event == 'PLAYER_REGEN_DISABLED' then
-            aura_env.startStats();
-        else
-            aura_env.endStats();
-        end
-    elseif event == 'DEMON_TIMERS_FORCE_START' then
-        aura_env.startStats('demon timers test');
-    elseif event == 'DEMON_TIMERS_FORCE_END' then
-        aura_env.endStats(); 
     end
 end

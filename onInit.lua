@@ -44,8 +44,21 @@ local impDelay = conf.general.summonDelay;
 aura_env.imps = {};
 aura_env.impClumps = {}; 
 
+local implosive_data = {};
+local last_implosive_check = nil;
+
+local legendaryEquipped = function(bonusid)
+    local found = false;
+    for i = 1, 12 do
+        local itemL = GetInventoryItemLink('player', i);
+        if itemL:find(bonusid) then found = true; end
+    end
+    return found;
+end
+
 local statsModule = aura_env.config.stats or true;
 local statMode = aura_env.config.statMode or 1;
+local statStart, statEnd = nil;
 -- 1 -> PLAYER_REGEN, 2 -> ENCOUNTER_START, 3 -> CHALLENGE_MODE_START
 local stats = {};
 
@@ -84,6 +97,8 @@ local resetStats = function()
         total_hogs = 0,
         wilfreds_cdr = 0,
         avg_implosive_haste = 0,
+        shards_spent = 0,
+        shards_spent_wilfred = 0,
     };
 end
 
@@ -111,18 +126,37 @@ aura_env.addDemon = function(name)
     end
 end
 
-aura_env.startStats = function(name)
+--https://gist.github.com/jesseadams/791673
+local function SecondsToClock(seconds)
+    local seconds = tonumber(seconds)
+  
+    if seconds <= 0 then
+      return "00:00";
+    else
+      local hours = string.format("%02.f", math.floor(seconds/3600));
+      local mins = string.format("%02.f", math.floor(seconds/60 - (hours*60)));
+      local secs = string.format("%02.f", math.floor(seconds - hours*3600 - mins *60));
+      return mins..":"..secs
+    end
+  end
+
+
+  aura_env.startStats = function(name)
     if not statsModule then return; end
     resetStats();
+    statStart = GetTime();
     stats.combatName = (statMode == 2 and name) or (statMode == 3 and C_Map.GetMapInfo(name).name or "Unknown Dungeon");
 end
 
 aura_env.endStats = function()
     if not statsModule then return; end
+    statEnd = GetTime();
+    local stat_duration = statEnd - statStart; -- time in seconds of the stat tracking period
+    local displayTime = SecondsToClock(stat_duration);
     if not stats or not stats.total_hogs then resetStats(); end
     local sorted_demons = {};
-    local name = stats.combatName or 'Demon Timer Stats';
-    local output_string = '|cffffcc00' .. name .. ':|r\n';
+    local name = format("%s:|r %s\n", stats.combatName or 'Demon Timer Stats', displayTime);
+    local output_string = '|cffffcc00' .. name;
     local col = '|cffffcc00';
     
     for k,v in pairs(stats.demons or {}) do
@@ -136,6 +170,15 @@ aura_env.endStats = function()
     if stats.tyrantFelFirebolts > 0 then output_string = output_string .. format('%s%s|r %i\n', col, 'Tyranted Fel Firebolts:|r ', stats.tyrantFelFirebolts); end
     if stats.imploded > 0 then output_string = output_string .. format('%s%s%i\n', col, 'Imps Imploded:|r ', stats.imploded); end
     if stats.horned_procs > 0 then output_string = output_string .. format('%s%s%i (%.1f%%)\n', col, 'Horned Nightmare Procs:|r ', stats.horned_procs, (stats.horned_procs / stats.total_hogs) * 100); end
+    if stats.shards_spent > 0 then output_string = output_string .. format('%s%s%i\n', col, 'Shards Spent:|r ', stats.shards_spent); end
+    if legendaryEquipped(7025) and stats.shards_spent_wilfred > 0 then output_string = output_string .. format('%s%s%.1fs\n', col, 'Wilfred CDR:|r ', stats.shards_spent_wilfred * 0.6); end
+    
+    if legendaryEquipped(7033) then
+        local implosive_p = aura_env.parseImplosiveData(stat_duration);
+        if implosive_p > 0 then
+            output_string = output_string .. format('%s%s%.1f%%\n', col, 'Average Implosive Haste:|r ', implosive_p);
+        end
+    end
     
     table.sort(sorted_demons, function(a,b) return a[2] > b[2] end);
     local total_demons = stats.total_demons or 0;
@@ -146,7 +189,73 @@ aura_env.endStats = function()
         end
     end
     
-    print(output_string);
+    if output_string ~= '' then
+        print(output_string);
+    end
+end
+
+WeakAuras.WatchSpellCooldown(265187); -- watch tyrant cd
+local tyrantOnCooldown = false;
+-- SPELL_COOLDOWN_CHANGED, SPELL_COOLDOWN_READY
+aura_env.handleCooldown = function(event, spell)
+    if spell == 265187 then
+       tyrantOnCooldown = select(2, GetSpellCooldown(spell)) ~= WeakAuras.gcdDuration();
+    end
+end
+
+aura_env.handleImplosive = function(event)
+    local time = GetTime();
+
+    if not last_implosive_check or (last_implosive_check < time - 1) then
+        last_implosive_check = time;
+        if event == 'SPELL_AURA_APPLIED' then
+            aura_env.haste = select(16, WA_GetUnitBuff('player', 337139));
+            table.insert(implosive_data, { time, 'applied', aura_env.haste });
+        elseif event == 'SPELL_AURA_REFRESH' then
+            table.insert(implosive_data, { time, 'removed', aura_env.haste });
+            aura_env.haste = select(16, WA_GetUnitBuff('player', 337139));
+            table.insert(implosive_data, { time, 'applied', aura_env.haste });
+        elseif event == 'SPELL_AURA_REMOVED' then        
+            table.insert(implosive_data, { time, 'removed', aura_env.haste });
+            aura_env.haste = nil;
+        end
+    end
+end
+
+aura_env.parseImplosiveData = function(combatTimer)
+    local size = #implosive_data;
+    local totaltime = combatTimer;
+    local total_area = 0;
+
+    local _t = nil;
+    for i = 1, size do
+        if implosive_data[i][2] == 'applied' then
+            _t = implosive_data[i][1]; -- timing variable
+        elseif implosive_data[i][2] == 'removed' then
+            local elapsed = _t and (implosive_data[i][1] - _t) or 0;
+            local area = implosive_data[i][3] * elapsed;
+            total_area = total_area + area;
+            _t = nil;
+        end
+    end
+    local average = combatTimer ~= 0 and total_area / combatTimer;
+    return average; -- https://i.imgur.com/gUysBhs.png based ms paint
+end
+
+local prev, curr;
+prev = UnitPower('player', Enum.PowerType.SoulShards);
+curr = UnitPower('player', Enum.PowerType.SoulShards);
+aura_env.shardUpdate = function()
+    prev = curr;
+    curr = UnitPower('player', Enum.PowerType.SoulShards);
+    local net = curr - prev;
+
+    if net < 0 then
+        addStat('shards_spent', -net);
+        if tyrantOnCooldown then
+            addStat('shards_spent_wilfred', -net);
+        end
+    end
 end
 
 -- debug frame
